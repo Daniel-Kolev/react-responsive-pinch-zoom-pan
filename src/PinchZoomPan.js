@@ -3,14 +3,11 @@ import PropTypes from 'prop-types'
 import { createSelector } from 'reselect'
 import warning from 'warning'
 
-import ZoomButtons from './ZoomButtons'
-import DebugView from './StateDebugView'
-
 import { snapToTarget, negate, constrain, getPinchLength, getPinchMidpoint, getRelativePosition, setRef, isEqualDimensions, getDimensions, getContainerDimensions, isEqualTransform, getAutofitScale, getMinScale, tryCancelEvent, getImageOverflow } from './Utils'
 
-const OVERZOOM_TOLERANCE = 0.05
+const OVERZOOM_TOLERANCE = 0.00
 const DOUBLE_TAP_THRESHOLD = 250
-const ANIMATION_SPEED = 0.1
+const ANIMATION_SPEED = 0.3
 
 const isInitialized = (top, left, scale) => scale !== undefined && left !== undefined && top !== undefined
 
@@ -78,6 +75,7 @@ export default class PinchZoomPan extends React.Component {
     imageRef; // image element
     isImageLoaded; // permits initial transform
     originalOverscrollBehaviorY; // saves the original overscroll-behavior-y value while temporarily preventing pull down refresh
+    resistanceZoomIn = 0;
 
     // event handlers
     handleTouchStart = (event) => {
@@ -169,6 +167,7 @@ export default class PinchZoomPan extends React.Component {
     handleMouseWheel = (event) => {
       this.cancelAnimation()
       const point = getRelativePosition(event, this.imageRef.parentNode)
+
       if (event.deltaY > 0) {
         if (this.state.scale > getMinScale(this.state, this.props)) {
           this.zoomOut(point)
@@ -186,8 +185,7 @@ export default class PinchZoomPan extends React.Component {
       this.debug('handleImageLoad')
       this.isImageLoaded = true
       this.maybeHandleDimensionsChanged()
-
-      const { onLoad } = React.Children.only(this.props.children)
+      const { onLoad } = React.Children.only(this.props.children).props || React.Children.only(this.props.children)
       if (typeof onLoad === 'function') {
         onLoad(event)
       }
@@ -254,8 +252,14 @@ export default class PinchZoomPan extends React.Component {
     }
 
     doubleClick (pointerPosition) {
-      if (String(this.props.doubleTapBehavior).toLowerCase() === 'zoom' && this.state.scale * (1 + OVERZOOM_TOLERANCE) < this.props.maxScale) {
-        this.zoomIn(pointerPosition, ANIMATION_SPEED, 0.3)
+      const {
+        doubleTapBehavior = '',
+        doubleClickFactor = 0.3,
+        maxScale = 1
+      } = this.props
+
+      if (String(doubleTapBehavior).toLowerCase() === 'zoom' && this.state.scale * (1 + OVERZOOM_TOLERANCE) < maxScale) {
+        this.zoomIn(pointerPosition, ANIMATION_SPEED, doubleClickFactor)
       } else {
         // reset
         this.applyInitialTransform(ANIMATION_SPEED)
@@ -279,6 +283,7 @@ export default class PinchZoomPan extends React.Component {
         x: this.state.containerDimensions.width / 2,
         y: this.state.containerDimensions.height / 2
       }
+
       this.zoom(this.state.scale * (1 + factor), midpoint, 0, speed)
     }
 
@@ -291,9 +296,20 @@ export default class PinchZoomPan extends React.Component {
     }
 
     zoom (requestedScale, containerRelativePoint, tolerance, speed = 0) {
+      const { resistanceZoomIn, resistanceMin, resistanceMax } = this.props
+
       if (!this.isTransformInitialized) {
         return
       }
+
+      if (requestedScale > this.state.scale && requestedScale > resistanceMin && requestedScale < resistanceMax) {
+        if (this.resistanceZoomIn < resistanceZoomIn) {
+          this.resistanceZoomIn++
+          return
+        }
+      }
+
+      this.resistanceZoomIn = 0
 
       const { scale, top, left } = this.state
       const imageRelativePoint = {
@@ -305,7 +321,6 @@ export default class PinchZoomPan extends React.Component {
       const incrementalScalePercentage = (nextScale - scale) / scale
       const translateY = imageRelativePoint.top * incrementalScalePercentage
       const translateX = imageRelativePoint.left * incrementalScalePercentage
-
       const nextTop = top - translateY
       const nextLeft = left - translateX
 
@@ -457,7 +472,7 @@ export default class PinchZoomPan extends React.Component {
 
     applyInitialTransform (speed = 0) {
       const { imageDimensions, containerDimensions } = this.state
-      const { position, initialScale, maxScale, initialTop, initialLeft } = this.props
+      const { position, initialScale, maxScale, initialTop, initialLeft, onZoomReset } = this.props
 
       const scale = String(initialScale).toLowerCase() === 'auto'
         ? getAutofitScale(containerDimensions, imageDimensions)
@@ -488,14 +503,13 @@ export default class PinchZoomPan extends React.Component {
         }
       }
 
+      onZoomReset && onZoomReset(false)
       this.constrainAndApplyTransform(initialPosition.top, initialPosition.left, scale, 0, speed)
     }
 
     // lifecycle methods
     render () {
       const childElement = React.Children.only(this.props.children)
-      const { zoomButtons, maxScale, debug } = this.props
-      const { scale } = this.state
 
       const touchAction = this.controlOverscrollViaCss
         ? browserPanActions(this.state) || 'none'
@@ -557,7 +571,17 @@ export default class PinchZoomPan extends React.Component {
     }
 
     componentDidUpdate (prevProps, prevState) {
+      const { resetZoom, onZoomChange } = this.props
       this.maybeHandleDimensionsChanged()
+
+      if (onZoomChange &&
+        this.state.scale !== prevState.scale) {
+        onZoomChange(this.zoomedValue)
+      }
+
+      if (resetZoom) {
+        this.applyInitialTransform(ANIMATION_SPEED)
+      }
     }
 
     componentWillUnmount () {
@@ -576,6 +600,10 @@ export default class PinchZoomPan extends React.Component {
 
     get controlOverscrollViaCss () {
       return CSS && CSS.supports('touch-action', 'pan-up')
+    }
+
+    get zoomedValue () {
+      return this.state.scale ? this.state.scale : 1
     }
 
     calculateNegativeSpace (scale) {
