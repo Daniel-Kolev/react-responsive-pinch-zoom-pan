@@ -638,13 +638,13 @@ PinchZoomPan.propTypes = {
     PropTypes.number,
     PropTypes.string
   ]),
+  // eslint-disable-next-line react/no-unused-prop-types
   minScale: PropTypes.oneOfType([
     PropTypes.number,
     PropTypes.string
   ]),
   maxScale: PropTypes.number,
   position: PropTypes.oneOf(['topLeft', 'center']),
-  zoomButtons: PropTypes.bool,
   doubleTapBehavior: PropTypes.oneOf(['reset', 'zoom']),
   initialTop: PropTypes.number,
   initialLeft: PropTypes.number
