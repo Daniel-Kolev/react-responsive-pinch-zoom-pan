@@ -5,7 +5,6 @@ import warning from 'warning'
 
 import { snapToTarget, negate, constrain, getPinchLength, getPinchMidpoint, getRelativePosition, setRef, isEqualDimensions, getDimensions, getContainerDimensions, isEqualTransform, getAutofitScale, getMinScale, tryCancelEvent, getImageOverflow } from './Utils'
 
-const OVERZOOM_TOLERANCE = 0.00
 const DOUBLE_TAP_THRESHOLD = 250
 const ANIMATION_SPEED = 0.3
 
@@ -255,10 +254,11 @@ export default class PinchZoomPan extends React.Component {
       const {
         doubleTapBehavior = '',
         doubleClickFactor = 0.3,
-        maxScale = 1
+        maxScale = 1,
+        overzoomTolerance = 0.05
       } = this.props
 
-      if (String(doubleTapBehavior).toLowerCase() === 'zoom' && this.state.scale * (1 + OVERZOOM_TOLERANCE) < maxScale) {
+      if (String(doubleTapBehavior).toLowerCase() === 'zoom' && this.state.scale * (1 + overzoomTolerance) < maxScale) {
         this.zoomIn(pointerPosition, ANIMATION_SPEED, doubleClickFactor)
       } else {
         // reset
@@ -267,13 +267,14 @@ export default class PinchZoomPan extends React.Component {
     }
 
     pinchChange (touches) {
+      const { overzoomTolerance = 0.05 } = this.props
       const length = getPinchLength(touches)
       const midpoint = getPinchMidpoint(touches)
       const scale = this.lastPinchLength
         ? this.state.scale * length / this.lastPinchLength // sometimes we get a touchchange before a touchstart when pinching
         : this.state.scale
 
-      this.zoom(scale, midpoint, OVERZOOM_TOLERANCE)
+      this.zoom(scale, midpoint, overzoomTolerance)
 
       this.lastPinchLength = length
     }
@@ -524,14 +525,6 @@ export default class PinchZoomPan extends React.Component {
 
       return (
         <div style={containerStyle}>
-          {zoomButtons && this.isImageReady && this.isTransformInitialized && <ZoomButtons
-            scale={scale}
-            minScale={getMinScale(this.state, this.props)}
-            maxScale={maxScale}
-            onZoomOutClick={this.handleZoomOutClick}
-            onZoomInClick={this.handleZoomInClick}
-          />}
-          {debug && <DebugView {...this.state} overflow={imageOverflow(this.state)} />}
           {React.cloneElement(childElement, {
             onTouchStart: this.handleTouchStart,
             onTouchEnd: this.handleTouchEnd,
