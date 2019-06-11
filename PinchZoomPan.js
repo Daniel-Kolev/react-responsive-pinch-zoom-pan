@@ -153,7 +153,6 @@ export default class PinchZoomPan extends React.Component {
     }
 
     handleMouseMove = (event) => {
-      if (!event.buttons) return null
       this.pan(event)
     }
 
@@ -181,7 +180,6 @@ export default class PinchZoomPan extends React.Component {
     }
 
     handleImageLoad = (event) => {
-      this.debug('handleImageLoad')
       this.isImageLoaded = true
       this.maybeHandleDimensionsChanged()
       const { onLoad } = React.Children.only(this.props.children).props || React.Children.only(this.props.children)
@@ -354,15 +352,11 @@ export default class PinchZoomPan extends React.Component {
             }
           }
           )
-          this.debug(`Dimensions changed: Container: ${containerDimensions.width}, ${containerDimensions.height}, Image: ${imageDimensions.width}, ${imageDimensions.height}`)
         }
-      } else {
-        this.debug('Image not loaded')
       }
     }
 
     // transformation methods
-
     // Zooming and panning cause transform to be requested.
     constrainAndApplyTransform (requestedTop, requestedLeft, requestedScale, tolerance, speed = 0) {
       const requestedTransform = {
@@ -370,11 +364,9 @@ export default class PinchZoomPan extends React.Component {
         left: requestedLeft,
         scale: requestedScale
       }
-      this.debug(`Requesting transform: left ${requestedLeft}, top ${requestedTop}, scale ${requestedScale}`)
 
       // Correct the transform if needed to prevent overpanning and overzooming
       const transform = this.getCorrectedTransform(requestedTransform, tolerance) || requestedTransform
-      this.debug(`Applying transform: left ${transform.left}, top ${transform.top}, scale ${transform.scale}`)
 
       if (isEqualTransform(transform, this.state)) {
         return false
@@ -613,12 +605,6 @@ export default class PinchZoomPan extends React.Component {
     cancelAnimation () {
       if (this.animation) {
         cancelAnimationFrame(this.animation)
-      }
-    }
-
-    debug (message) {
-      if (this.props.debug) {
-        console.log(message)
       }
     }
 }
